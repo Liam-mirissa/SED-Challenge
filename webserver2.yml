@@ -1,0 +1,64 @@
+---
+- name: Create a new EC2 instance
+  hosts: localhost
+  become: true
+  connection: local
+  gather_facts: False
+  
+  vars:
+    instance_type: t2.micro
+    security_group: webserver_sg
+    ami: "0f3c9c466bb525749"
+
+  tasks:
+    - name: Launch an EC2 instance
+      ec2:
+        aws_access_key: AKIASJQERVEW3UXZDWRP  
+        aws_secret_key: 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
+        instance_type: t2.micro
+        image: ami-0f3c9c466bb525749
+        wait: yes
+        group_id: sg-0f06db094957ae2d6
+        count: 1
+        region: us-east-2
+        key_name: ansible-key
+        vpc_subnet_id: subnet-02230e7fadbe1fa21
+      register: ec2_result
+
+    - name: Wait for instance to come up
+      wait_for:
+        host: "{{ ec2_result.instances[0].public_ip }}"
+        port: 22
+        delay: 10
+        timeout: 320
+      become: false
+
+    # Configuration for web server
+    - name: Install Nginx
+      package:
+        name: nginx
+        state: present
+      become: true
+
+    - name: Create index.html file
+      copy:
+        content: |
+          <html>
+            <head>
+              <title>Hello World</title>
+            </head>
+            <body>
+              <h1>Hello World!</h1>
+            </body>
+          </html>
+        dest: /var/www/html/index.html
+      become: true
+
+    - name: Restart Nginx
+      systemd:
+        name: nginx
+        state: restarted
+      become: true
+
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
