@@ -1,0 +1,62 @@
+---
+- name: Create a new EC2 instance
+  hosts: localhost
+  connection: local
+  gather_facts: False
+
+  vars:
+    instance_type: t2.micro
+    security_group: webserver_sg
+    ami: ami-0c94855ba95c71c99 # Ubuntu 20.04 LTS
+
+  tasks:
+  - name: Launch an EC2 instance
+    ec2:
+      instance_type: "{{ instance_type }}"
+      image: "{{ ami }}"
+      wait: yes
+      group_id: "{{ security_group }}"
+      count: 1
+      region: us-east-1
+      key_name: ansible-key.pem
+      vpc_subnet_id: subnet-02230e7fadbe1fa21
+    register: ec2
+
+  - name: Wait for instance to come up
+    wait_for:
+      host: "{{ ec2.instances[0].public_ip }}"
+      port: 22
+      delay: 10
+      timeout: 320
+    become: false
+
+  - name: Configure new instance
+    hosts: ec2
+    become: true
+    gather_facts: True
+    tasks:
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+      become: true
+
+    - name: Create index.html file
+      copy:
+        content: |
+          <html>
+            <head>
+              <title>Hello World</title>
+            </head>
+            <body>
+              <h1>Hello World!</h1>
+            </body>
+          </html>
+        dest: /var/www/html/index.html
+      become: true
+
+    - name: Restart Nginx
+      systemd:
+        name: nginx
+        state: restarted
+      become: true
